@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quickart-config
+  namespace: quickart
+data:
+  ENV: "prod"
