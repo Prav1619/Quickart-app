@@ -5,3 +5,4 @@ metadata:
   namespace: quickart
 data:
   ENV: "prod"
+  APP_MODE: "api-only"
