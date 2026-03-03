@@ -47,7 +47,8 @@ The CI/CD pipeline automatically tags each build using the Jenkins $BUILD_NUMBER
 Every release is uniquely identifiable
 Full traceability across environments
 Simple and reliable rollback options
-This mimics real container lifecycle management in companies.
+This mimics real container lifecycle management in companies.<img width="1868" height="515" alt="image" src="https://github.com/user-attachments/assets/f5e32ad2-431c-4b32-b19e-1890accdc9f5" />
+
 
 3. Kubernetes Deployment on EKS
 
