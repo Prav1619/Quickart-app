@@ -1,33 +1,89 @@
-name: My CI workflow
+name: Smart CI - Quickart
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Code checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup JDK
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: maven
 
-      - name: Build & Test
-        run: mvn clean package
-      
-      - name: Debug targets
-        run: find . -type d -name target
-      
-      - name: Upload Artifacts
+      # -----------------------------
+      # Step 1: Detect changed files
+      # -----------------------------
+      - name: Detect changes
+        id: changes
+        run: |
+          git fetch origin main
+          FILES=$(git diff --name-only origin/main)
+
+          echo "Changed files:"
+          echo "$FILES"
+
+          echo "FILES=$FILES" >> $GITHUB_ENV
+
+      # -----------------------------
+      # Step 2: Determine impacted services
+      # -----------------------------
+      - name: Determine impacted services
+        id: impact
+        run: |
+          SERVICES=""
+
+          # 🔴 FULL BUILD CONDITIONS (important)
+          if echo "$FILES" | grep -E 'pom.xml|k8s/|scripts/|terraform/'; then
+            echo "Global change detected → building all services"
+            SERVICES="product-service user-service order-service"
+          else
+            echo "$FILES" | grep -q "^product-service/" && SERVICES="$SERVICES product-service"
+            echo "$FILES" | grep -q "^user-service/" && SERVICES="$SERVICES user-service"
+            echo "$FILES" | grep -q "^order-service/" && SERVICES="$SERVICES order-service"
+          fi
+
+          # 🔴 Fallback (nothing detected)
+          if [ -z "$SERVICES" ]; then
+            echo "No service detected → fallback to full build"
+            SERVICES="product-service user-service order-service"
+          fi
+
+          echo "Final impacted services: $SERVICES"
+          echo "SERVICES=$SERVICES" >> $GITHUB_ENV
+
+      # -----------------------------
+      # Step 3: Build only impacted services
+      # -----------------------------
+      - name: Build impacted services
+        run: |
+          for svc in $SERVICES; do
+            echo "=============================="
+            echo "Building $svc"
+            echo "=============================="
+
+            mvn clean package -pl $svc -am
+          done
+
+      # -----------------------------
+      # Step 4: Debug (see outputs)
+      # -----------------------------
+      - name: List generated JARs
+        run: find . -name "*.jar"
+
+      # -----------------------------
+      # Step 5: Upload artifacts
+      # -----------------------------
+      - name: Upload JARs
         uses: actions/upload-artifact@v4
         with:
-          name: all-services
+          name: microservices-artifacts
           path: "**/target/*.jar"
