@@ -24,6 +24,4 @@ jobs:
         with: 
           name: app-jar
           path: target/*.jar
-          name: test-reports
-          path: target/test-reports/
           
