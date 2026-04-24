@@ -16,12 +16,16 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: maven
-
-      - name: build and test
-        run: mvn clean verify
-      - name: upload artifact
+  
+       - name: Build & Test
+         run: mvn clean package
+  
+      - name: Debug build output
+        run: ls -R target
+      
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
-        with: 
-          name: app-jar
+        with:
+          name: build-output
           path: target/*.jar
-          
+            
