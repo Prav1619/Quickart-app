@@ -10,7 +10,7 @@
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
-    <!-- All services introduced as modules -->
+    <!-- All services introduced as modules.. -->
     <modules>
         <module>product-service</module>
         <module>user-service</module>
