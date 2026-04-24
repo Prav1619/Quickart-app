@@ -113,19 +113,22 @@ jobs:
           name: microservices-artifacts
           path: "**/target/*.jar"
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-      - name: Build & Push Docker Images
+      - name: Build & Push Docker Images (parallel)
         run: |
-          for svc in $SERVICES; do
-            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/$svc:${{ github.sha }}
+          set -e
       
-            docker build -t $IMAGE ./$svc
-            docker push $IMAGE
-          done    
+          for svc in $SERVICES; do
+            (
+              BASE=${{ secrets.DOCKERHUB_USERNAME }}/$svc
+              SHA=${{ github.sha }}
+      
+              echo "Building $svc"
+      
+              docker build -t $BASE:$SHA -t $BASE:latest ./$svc
+              docker push $BASE:$SHA
+            ) &
+          done
+      
+          wait
 
           
