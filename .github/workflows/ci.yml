@@ -3,6 +3,11 @@ name: Smart CI - Quickart
 on:
   push:
     branches: [main]
+    paths:
+      - 'product-service/**'
+      - 'user-service/**'
+      - 'order-service/**'
+      - 'pom.xml'
 
 jobs:
   build:
