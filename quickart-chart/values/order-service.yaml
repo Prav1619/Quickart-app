@@ -1,0 +1,9 @@
+app:
+  name: order-service
+
+image:
+  repository: prav1619/quickart-order-service
+  tag: latest
+
+service:
+  port: 8083
