@@ -2,7 +2,7 @@ app:
   name: order-service
 
 image:
-  repository: prav1619/quickart-order-service
+  repository: prav1619/order-service
   tag: latest
 
 service:
