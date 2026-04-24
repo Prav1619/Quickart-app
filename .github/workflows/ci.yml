@@ -10,6 +10,7 @@ on:
       - 'pom.xml'
       - '!**/*.md'
       - '!.github/workflows/**'
+   workflow-dispatch:   
 
 jobs:
   build:
@@ -33,7 +34,13 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: maven
-
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
       # ----------------------------------
       # 3. Detect changed files
       # ----------------------------------
