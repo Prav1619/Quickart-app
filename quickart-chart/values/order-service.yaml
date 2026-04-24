@@ -6,4 +6,4 @@ image:
   tag: latest
 
 service:
-  port: 8083
+  port: 8080
