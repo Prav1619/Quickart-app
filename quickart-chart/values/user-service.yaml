@@ -2,7 +2,7 @@ app:
   name: user-service
 
 image:
-  repository: prav1619/quickart-user-service
+  repository: prav1619/user-service
   tag: latest
 
 service:
