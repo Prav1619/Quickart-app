@@ -90,7 +90,7 @@ jobs:
       - name: Build impacted services
         run: |
           echo "Building services: $SERVICES"
-          mvn clean package -pl $SERVICES -am
+          mvn clean package -pl $(echo $SERVICES | tr ' ' ',') -am
 
       # ----------------------------------
       # 6. Verify outputs
