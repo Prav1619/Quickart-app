@@ -10,7 +10,7 @@ public class UserService {
     public List<User> getUsers() {
         return List.of(
                 new User("101", "Pravallikha"),
-                new User("102", "Kiran")
+                new User("102", "sai")
         );
     }
 }
