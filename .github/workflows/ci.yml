@@ -22,12 +22,12 @@ jobs:
 
       - name: Build & Test
         run: mvn clean package
-
-      - name: Debug build output
-        run: ls -R target
-
-      - name: Upload JAR
+      
+      - name: Debug targets
+        run: find . -type d -name target
+      
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-output
-          path: target/*.jar
+          name: all-services
+          path: "**/target/*.jar"
