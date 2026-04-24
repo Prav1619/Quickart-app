@@ -1,9 +1,0 @@
-app:
-  name: user-service
-
-image:
-  repository: prav1619/quickart-user-service
-  tag: latest
-
-service:
-  port: 8082
