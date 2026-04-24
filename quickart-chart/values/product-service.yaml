@@ -2,7 +2,7 @@ app:
   name: product-service
 
 image:
-  repository: prav1619/quickart-product-service
+  repository: prav1619/product-service
   tag: latest
 
 service:
