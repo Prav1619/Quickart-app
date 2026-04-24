@@ -1,0 +1,26 @@
+name: My CI workflow
+on: 
+  push:
+    branches: 
+       - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: code checkout
+        uses: actions/chekcout@v6
+  
+      - name: setup -jdk
+        uses: actions/setup-java@v4
+        with: 
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: build and test
+        run: mvn clean verify
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with: 
+          name: build and test reports
+          path: ./packages
