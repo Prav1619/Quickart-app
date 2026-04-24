@@ -2,6 +2,16 @@ name: Smart CI - Quickart
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'product-service/**'
+      - 'user-service/**'
+      - 'order-service/**'
+      - 'pom.xml'
+    paths-ignore:
+      - '**/*.md'
+      - '.github/workflows/**'
 jobs:
   build:
     runs-on: ubuntu-latest
