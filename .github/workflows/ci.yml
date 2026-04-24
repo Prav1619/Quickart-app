@@ -118,24 +118,15 @@ jobs:
         with:
             username: ${{ secrets.DOCKERHUB_USERNAME }}
             password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build & Push Docker Images (parallel)
+      - name: Build & Push Image
         run: |
-          set -e
-      
-          for svc in $SERVICES; do
-            (
-              BASE=${{ secrets.DOCKERHUB_USERNAME }}/$svc
-              SHA=${{ github.sha }}
-      
-              echo "Building $svc"
-      
-              docker build -t $BASE:$SHA -t $BASE:latest ./$svc
-              docker push $BASE:$SHA
-              docker push $BASE:latest
-            ) &
-          done
-      
-          wait
+         docker build -t prav1619/${{ matrix.service }}:${{ github.sha }} ./${{ matrix.service }}
+         docker push prav1619/${{ matrix.service }}:${{ github.sha }}
+      - name: Deploy to EKS
+        run: |
+          helm upgrade --install ${{ matrix.service }} ./quickart-chart \
+          -f quickart-chart/values/${{ matrix.service }}.yaml \
+          --set image.tag=${{ github.sha }} \
+          -n quickart --create-namespace
 
           
