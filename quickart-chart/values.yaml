@@ -1,0 +1,10 @@
+app:
+  name: ""
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+service:
+  port: 8080
