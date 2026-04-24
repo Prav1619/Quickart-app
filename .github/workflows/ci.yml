@@ -1,31 +1,33 @@
 name: My CI workflow
-on: 
+
+on:
   push:
-    branches: 
-       - main
+    branches:
+      - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: code checkout
+      - name: Code checkout
         uses: actions/checkout@v4
-  
-      - name: setup -jdk
+
+      - name: Setup JDK
         uses: actions/setup-java@v4
-        with: 
+        with:
           distribution: temurin
           java-version: 17
           cache: maven
-  
-       - name: Build & Test
-         run: mvn clean package
-  
+
+      - name: Build & Test
+        run: mvn clean package
+
       - name: Debug build output
         run: ls -R target
-      
+
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: build-output
           path: target/*.jar
-            
