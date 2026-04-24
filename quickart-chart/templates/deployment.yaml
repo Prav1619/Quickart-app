@@ -17,7 +17,7 @@ spec:
 
     spec:
       containers:
-        - name: {{ .Values.app.name | default "quickart" }}
+        - name: {{ .Values.app.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
