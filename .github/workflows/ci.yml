@@ -8,15 +8,25 @@ on:
       - 'user-service/**'
       - 'order-service/**'
       - 'pom.xml'
+      - '!**/*.md'
+      - '!.github/workflows/**'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # ----------------------------------
+      # 1. Checkout full repo history
+      # ----------------------------------
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # REQUIRED for diff to work
 
+      # ----------------------------------
+      # 2. Setup Java
+      # ----------------------------------
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -24,40 +34,48 @@ jobs:
           java-version: 17
           cache: maven
 
-      # -----------------------------
-      # Step 1: Detect changed files
-      # -----------------------------
+      # ----------------------------------
+      # 3. Detect changed files
+      # ----------------------------------
       - name: Detect changes
+        id: changes
         run: |
-          echo "Before: ${{ github.event.before }}"
-          echo "After:  ${{ github.sha }}"
-      
-          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
-      
+          BEFORE=${{ github.event.before }}
+          AFTER=${{ github.sha }}
+
+          echo "Before: $BEFORE"
+          echo "After:  $AFTER"
+
+          # Handle edge cases safely
+          if git cat-file -e $BEFORE^{commit} 2>/dev/null; then
+            FILES=$(git diff --name-only $BEFORE $AFTER)
+          else
+            echo "Invalid BEFORE commit → fallback"
+            FILES=""
+          fi
+
           echo "Changed files:"
           echo "$FILES"
-      
+
           echo "FILES=$FILES" >> $GITHUB_ENV
 
-      # -----------------------------
-      # Step 2: Determine impacted services
-      # -----------------------------
+      # ----------------------------------
+      # 4. Determine impacted services
+      # ----------------------------------
       - name: Determine impacted services
-        id: impact
         run: |
           SERVICES=""
 
-          # 🔴 FULL BUILD CONDITIONS (important)
+          # Global changes → build all
           if echo "$FILES" | grep -E 'pom.xml|k8s/|scripts/|terraform/'; then
-            echo "Global change detected → building all services"
             SERVICES="product-service user-service order-service"
           else
-            echo "$FILES" | grep -q "^product-service/" && SERVICES="$SERVICES product-service"
-            echo "$FILES" | grep -q "^user-service/" && SERVICES="$SERVICES user-service"
-            echo "$FILES" | grep -q "^order-service/" && SERVICES="$SERVICES order-service"
+            echo "$FILES" | grep -q "product-service/" && SERVICES="$SERVICES product-service"
+            echo "$FILES" | grep -q "user-service/" && SERVICES="$SERVICES user-service"
+            echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
           fi
 
-          # 🔴 Fallback (nothing detected)
+          # Fallback if nothing detected
           if [ -z "$SERVICES" ]; then
             echo "No service detected → fallback to full build"
             SERVICES="product-service user-service order-service"
@@ -66,29 +84,24 @@ jobs:
           echo "Final impacted services: $SERVICES"
           echo "SERVICES=$SERVICES" >> $GITHUB_ENV
 
-      # -----------------------------
-      # Step 3: Build only impacted services
-      # -----------------------------
+      # ----------------------------------
+      # 5. Build (efficient way)
+      # ----------------------------------
       - name: Build impacted services
         run: |
-          for svc in $SERVICES; do
-            echo "=============================="
-            echo "Building $svc"
-            echo "=============================="
+          echo "Building services: $SERVICES"
+          mvn clean package -pl $SERVICES -am
 
-            mvn clean package -pl $svc -am
-          done
-
-      # -----------------------------
-      # Step 4: Debug (see outputs)
-      # -----------------------------
+      # ----------------------------------
+      # 6. Verify outputs
+      # ----------------------------------
       - name: List generated JARs
         run: find . -name "*.jar"
 
-      # -----------------------------
-      # Step 5: Upload artifacts
-      # -----------------------------
-      - name: Upload JARs
+      # ----------------------------------
+      # 7. Upload artifacts
+      # ----------------------------------
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: microservices-artifacts
