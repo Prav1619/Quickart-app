@@ -3,7 +3,7 @@ app:
 
 image:
   repository: prav1619/user-service
-  tag: latest
+  tag: ""
 
 service:
   port: 8080
