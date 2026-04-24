@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.app.name | default "quickart" }}
+  name: {{ .Values.app.name" }}
 
 spec:
   replicas: 1
 
   selector:
     matchLabels:
-      app: {{ .Values.app.name | default "quickart" }}
+      app: {{ .Values.app.name }}
 
   template:
     metadata:
       labels:
-        app: {{ .Values.app.name | default "quickart" }}
+        app: {{ .Values.app.name }}
 
     spec:
       containers:
