@@ -23,14 +23,15 @@ jobs:
       # Step 1: Detect changed files
       # -----------------------------
       - name: Detect changes
-        id: changes
         run: |
-          git fetch origin main
-          FILES=$(git diff --name-only HEAD~1 HEAD)
-
+          echo "Before: ${{ github.event.before }}"
+          echo "After:  ${{ github.sha }}"
+      
+          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+      
           echo "Changed files:"
           echo "$FILES"
-
+      
           echo "FILES=$FILES" >> $GITHUB_ENV
 
       # -----------------------------
