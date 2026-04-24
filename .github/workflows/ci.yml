@@ -9,8 +9,10 @@ on:
       - 'user-service/**'
       - 'order-service/**'
       - 'pom.xml'
-      - '!**/*.md'
-      - '!.github/workflows/**'
+    paths-ignore:
+      - '**/*.md'
+      - '.github/workflows/**'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,7 +24,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # REQUIRED for diff to work
+          fetch-depth: 0
 
       # ----------------------------------
       # 2. Setup Java
@@ -33,6 +35,10 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: maven
+
+      # ----------------------------------
+      # 3. Cache Maven dependencies
+      # ----------------------------------
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -40,11 +46,11 @@ jobs:
           key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             maven-${{ runner.os }}-
+
       # ----------------------------------
-      # 3. Detect changed files
+      # 4. Detect changed files
       # ----------------------------------
       - name: Detect changes
-        id: changes
         run: |
           BEFORE=${{ github.event.before }}
           AFTER=${{ github.sha }}
@@ -52,7 +58,6 @@ jobs:
           echo "Before: $BEFORE"
           echo "After:  $AFTER"
 
-          # Handle edge cases safely
           if git cat-file -e $BEFORE^{commit} 2>/dev/null; then
             FILES=$(git diff --name-only $BEFORE $AFTER)
           else
@@ -66,13 +71,12 @@ jobs:
           echo "FILES=$FILES" >> $GITHUB_ENV
 
       # ----------------------------------
-      # 4. Determine impacted services
+      # 5. Determine impacted services
       # ----------------------------------
       - name: Determine impacted services
         run: |
           SERVICES=""
 
-          # Global changes → build all
           if echo "$FILES" | grep -E 'pom.xml|k8s/|scripts/|terraform/'; then
             SERVICES="product-service user-service order-service"
           else
@@ -81,7 +85,6 @@ jobs:
             echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
           fi
 
-          # Fallback if nothing detected
           if [ -z "$SERVICES" ]; then
             echo "No service detected → fallback to full build"
             SERVICES="product-service user-service order-service"
@@ -91,7 +94,7 @@ jobs:
           echo "SERVICES=$SERVICES" >> $GITHUB_ENV
 
       # ----------------------------------
-      # 5. Build (efficient way)
+      # 6. Build
       # ----------------------------------
       - name: Build impacted services
         run: |
@@ -99,13 +102,13 @@ jobs:
           mvn clean package -pl $(echo $SERVICES | tr ' ' ',') -am
 
       # ----------------------------------
-      # 6. Verify outputs
+      # 7. Verify outputs
       # ----------------------------------
       - name: List generated JARs
         run: find . -name "*.jar"
 
       # ----------------------------------
-      # 7. Upload artifacts
+      # 8. Upload artifacts
       # ----------------------------------
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
