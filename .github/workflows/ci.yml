@@ -10,7 +10,7 @@ on:
       - 'pom.xml'
       - '!**/*.md'
       - '!.github/workflows/**'
-   workflow-dispatch:   
+  workflow_dispatch:   
 
 jobs:
   build:
