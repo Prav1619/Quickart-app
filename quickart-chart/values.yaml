@@ -4,7 +4,7 @@ app:
 image:
   repository: ""
   tag: ""
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 service:
   port: 8080
