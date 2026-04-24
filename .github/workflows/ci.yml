@@ -9,9 +9,8 @@ on:
       - 'user-service/**'
       - 'order-service/**'
       - 'pom.xml'
-    paths-ignore:
-      - '**/*.md'
-      - '.github/workflows/**'
+      - '!**/*.md'
+      - '!.github/workflows/**'
 jobs:
   build:
     runs-on: ubuntu-latest
