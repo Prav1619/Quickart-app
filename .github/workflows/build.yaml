@@ -1,0 +1,72 @@
+name: Smart CI - Quickart
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  detect-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: changes
+        run: |
+          BEFORE=${{ github.event.before }}
+          AFTER=${{ github.sha }}
+
+          if git cat-file -e $BEFORE^{commit} 2>/dev/null; then
+            FILES=$(git diff --name-only $BEFORE $AFTER)
+          else
+            FILES=""
+          fi
+
+          echo "FILES=$FILES" >> $GITHUB_ENV
+
+      - name: Determine services
+        run: |
+          SERVICES=""
+
+          # Common change → build all
+          if echo "$FILES" | grep -E 'pom.xml|common-lib/'; then
+            SERVICES="product-service user-service order-service"
+          else
+            echo "$FILES" | grep -q "product-service/" && SERVICES="$SERVICES product-service"
+            echo "$FILES" | grep -q "user-service/" && SERVICES="$SERVICES user-service"
+            echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
+          fi
+
+          # fallback
+          if [ -z "$SERVICES" ]; then
+            SERVICES="product-service user-service order-service"
+          fi
+
+          echo "SERVICES=$SERVICES" >> $GITHUB_ENV
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build impacted services
+        run: |
+          mvn clean package -pl $(echo $SERVICES | tr ' ' ',') -am
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Images
+        run: |
+          for svc in $SERVICES; do
+            echo "Building $svc"
+            docker build -t prav1619/$svc:${GITHUB_SHA} ./$svc
+            docker push prav1619/$svc:${GITHUB_SHA}
+          done
