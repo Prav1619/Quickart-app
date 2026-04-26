@@ -67,6 +67,6 @@ jobs:
         run: |
           for svc in $SERVICES; do
             echo "Building $svc"
-            docker build -t prav1619/$svc:${GITHUB_SHA} ./$svc
-            docker push prav1619/$svc:${GITHUB_SHA}
+            docker build -t prav1619/$svc:"^[0-9a-f]{40}$" ./$svc
+            docker push prav1619/$svc:"^[0-9a-f]{40}$"
           done
