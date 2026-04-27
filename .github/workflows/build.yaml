@@ -79,7 +79,14 @@ jobs:
             echo "----------------------------------"
             echo "Building $svc with tag $TAG"
             echo "----------------------------------"
-    
-            docker build -t prav1619/$svc:$TAG ./$svc
+      
+            docker build --no-cache -t prav1619/$svc:$TAG ./$svc
+            docker tag prav1619/$svc:$TAG prav1619/$svc:latest
+      
             docker push prav1619/$svc:$TAG
+            docker push prav1619/$svc:latest
+      
+            echo "Pushed:"
+            echo "prav1619/$svc:$TAG"
+            echo "prav1619/$svc:latest"
           done
