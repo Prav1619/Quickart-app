@@ -1,106 +1,106 @@
 name: Smart CI - Quickart
 
 on:
-push:
-branches: [main]
+  push:
+    branches: [main]
 
 jobs:
-detect-and-build:
-runs-on: ubuntu-latest
+  detect-and-build:
+  runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout code
-    uses: actions/checkout@v4
-    with:
-      fetch-depth: 0
-
-  # -------------------------------
-  # Detect changed files
-  # -------------------------------
-  - name: Detect changed files
-    id: changes
-    run: |
-      BEFORE=${{ github.event.before }}
-      AFTER=${{ github.sha }}
-
-      if git cat-file -e $BEFORE^{commit} 2>/dev/null; then
-        FILES=$(git diff --name-only $BEFORE $AFTER)
-      else
-        FILES=""
-      fi
-
-      echo "Changed files:"
-      echo "$FILES"
-
-      echo "FILES=$FILES" >> $GITHUB_ENV
-
-  # -------------------------------
-  # Determine impacted services
-  # -------------------------------
-  - name: Determine services
-    run: |
-      SERVICES=""
-
-      if echo "$FILES" | grep -E 'pom.xml|common-lib/'; then
-        SERVICES="product-service user-service order-service"
-      else
-        echo "$FILES" | grep -q "product-service/" && SERVICES="$SERVICES product-service"
-        echo "$FILES" | grep -q "user-service/" && SERVICES="$SERVICES user-service"
-        echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
-      fi
-
-      if [ -z "$SERVICES" ]; then
-        SERVICES="product-service user-service order-service"
-      fi
-
-      echo "Services to build: $SERVICES"
-      echo "SERVICES=$SERVICES" >> $GITHUB_ENV
-
-  # -------------------------------
-  # Setup Java
-  # -------------------------------
-  - name: Setup Java
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: 17
-
-  # -------------------------------
-  # Build services
-  # -------------------------------
-  - name: Build impacted services
-    run: |
-      mvn clean package -pl $(echo $SERVICES | tr ' ' ',') -am
-
-  # -------------------------------
-  # Generate image tag (short SHA)
-  # -------------------------------
-  - name: Set image tag
-    run: |
-      TAG=$(echo $GITHUB_SHA | cut -c1-7)
-      echo "TAG=$TAG" >> $GITHUB_ENV
-      echo "Using tag: $TAG"
-
-  # -------------------------------
-  # Login to Docker Hub
-  # -------------------------------
-  - name: Login Docker Hub
-    uses: docker/login-action@v3
-    with:
-      username: ${{ secrets.DOCKERHUB_USERNAME }}
-      password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  # -------------------------------
-  # Build & Push Docker images
-  # -------------------------------
-  - name: Build & Push Images
-    run: |
-      for svc in $SERVICES; do
-        echo "----------------------------------"
-        echo "Building $svc with tag $TAG"
-        echo "----------------------------------"
-
-        docker build -t prav1619/$svc:$TAG ./$svc
-        docker push prav1619/$svc:$TAG
-      done
+  steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+    
+      # -------------------------------
+      # Detect changed files
+      # -------------------------------
+      - name: Detect changed files
+        id: changes
+        run: |
+          BEFORE=${{ github.event.before }}
+          AFTER=${{ github.sha }}
+    
+          if git cat-file -e $BEFORE^{commit} 2>/dev/null; then
+            FILES=$(git diff --name-only $BEFORE $AFTER)
+          else
+            FILES=""
+          fi
+    
+          echo "Changed files:"
+          echo "$FILES"
+    
+          echo "FILES=$FILES" >> $GITHUB_ENV
+    
+      # -------------------------------
+      # Determine impacted services
+      # -------------------------------
+      - name: Determine services
+        run: |
+          SERVICES=""
+    
+          if echo "$FILES" | grep -E 'pom.xml|common-lib/'; then
+            SERVICES="product-service user-service order-service"
+          else
+            echo "$FILES" | grep -q "product-service/" && SERVICES="$SERVICES product-service"
+            echo "$FILES" | grep -q "user-service/" && SERVICES="$SERVICES user-service"
+            echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
+          fi
+    
+          if [ -z "$SERVICES" ]; then
+            SERVICES="product-service user-service order-service"
+          fi
+    
+          echo "Services to build: $SERVICES"
+          echo "SERVICES=$SERVICES" >> $GITHUB_ENV
+    
+      # -------------------------------
+      # Setup Java
+      # -------------------------------
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+    
+      # -------------------------------
+      # Build services
+      # -------------------------------
+      - name: Build impacted services
+        run: |
+          mvn clean package -pl $(echo $SERVICES | tr ' ' ',') -am
+    
+      # -------------------------------
+      # Generate image tag (short SHA)
+      # -------------------------------
+      - name: Set image tag
+        run: |
+          TAG=$(echo $GITHUB_SHA | cut -c1-7)
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "Using tag: $TAG"
+    
+      # -------------------------------
+      # Login to Docker Hub
+      # -------------------------------
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+      # -------------------------------
+      # Build & Push Docker images
+      # -------------------------------
+      - name: Build & Push Images
+        run: |
+          for svc in $SERVICES; do
+            echo "----------------------------------"
+            echo "Building $svc with tag $TAG"
+            echo "----------------------------------"
+    
+            docker build -t prav1619/$svc:$TAG ./$svc
+            docker push prav1619/$svc:$TAG
+          done
 ```
