@@ -1,41 +1,53 @@
-name: Smart CI - Quickart
+name: Smart CI - Quickart-update-image
 
 on:
- push:
-  branches:
-   - main
- workflow_dispatch:   
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
 
 jobs:
-  detect-and-build:
-   runs-on: ubuntu-latest
-   steps:
-      - name: Checkout code
+  detect-build-and-create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =========================
+      # Checkout Application Repo
+      # =========================
+      - name: Checkout application repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-    
+
+      # =========================
+      # Detect Changed Files
+      # =========================
       - name: Detect changed files
         id: changes
         run: |
           BEFORE=${{ github.event.before }}
           AFTER=${{ github.sha }}
-    
+
           if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             FILES=$(git diff --name-only "$BEFORE" "$AFTER")
           else
             FILES=""
           fi
-    
+
           echo "Changed files:"
           echo "$FILES"
-    
+
           echo "FILES=$FILES" >> $GITHUB_ENV
-    
-      - name: Determine services
+
+      # =========================
+      # Determine Impacted Services
+      # =========================
+      - name: Determine impacted services
         run: |
           SERVICES=""
-    
+
           if echo "$FILES" | grep -E 'pom.xml|common-lib/'; then
             SERVICES="product-service user-service order-service"
           else
@@ -43,50 +55,134 @@ jobs:
             echo "$FILES" | grep -q "user-service/" && SERVICES="$SERVICES user-service"
             echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
           fi
-    
+
+          SERVICES=$(echo $SERVICES | xargs)
+
           if [ -z "$SERVICES" ]; then
-            SERVICES="product-service user-service order-service"
+            echo "No impacted services found."
+            exit 0
           fi
-    
+
           echo "Services to build: $SERVICES"
+
           echo "SERVICES=$SERVICES" >> $GITHUB_ENV
-    
+
+      # =========================
+      # Setup Java
+      # =========================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-    
+
+      # =========================
+      # Build Services
+      # =========================
       - name: Build impacted services
         run: |
           mvn clean package -pl $(echo "$SERVICES" | tr ' ' ',') -am
-    
-      - name: Set image tag
+
+      # =========================
+      # Generate Image Tag
+      # =========================
+      - name: Generate image tag
         run: |
           TAG=$(echo "${{ github.sha }}" | cut -c1-7)
+
           echo "TAG=$TAG" >> $GITHUB_ENV
-          echo "Using tag: $TAG"
-    
+
+          echo "Using image tag: $TAG"
+
+      # =========================
+      # Docker Login
+      # =========================
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-    
-      - name: Build and Push Images
+
+      # =========================
+      # Build and Push Images
+      # =========================
+      - name: Build and push Docker images
         run: |
           for svc in $SERVICES; do
-            echo "----------------------------------"
-            echo "Building $svc with tag $TAG"
-            echo "----------------------------------"
-      
-            docker build --no-cache -t prav1619/$svc:$TAG ./$svc
+
+            echo "===================================="
+            echo "Building service: $svc"
+            echo "===================================="
+
+            docker build \
+              -t prav1619/$svc:$TAG \
+              ./$svc
+
             docker tag prav1619/$svc:$TAG prav1619/$svc:latest
-      
+
             docker push prav1619/$svc:$TAG
             docker push prav1619/$svc:latest
-      
-            echo "Pushed:"
-            echo "prav1619/$svc:$TAG"
-            echo "prav1619/$svc:latest"
+
           done
+
+      # =========================
+      # Clone Deployment Repo
+      # =========================
+      - name: Clone deployment repository
+        run: |
+          git clone https://${{ secrets.DEPLOY_REPO_TOKEN }}@github.com/Prav1619/Quickart-deploy.git
+
+      # =========================
+      # Update Only Impacted Values Files
+      # =========================
+      - name: Update Helm values files
+        run: |
+          cd Quickart-deploy
+
+          for svc in $SERVICES; do
+
+            FILE="environments/prod/$svc.yaml"
+
+            echo "Updating image tag in $FILE"
+
+            sed -i "s/tag:.*/tag: \"$TAG\"/" $FILE
+
+            echo "Updated file:"
+            cat $FILE
+
+          done
+
+      # =========================
+      # Create Branch + Commit
+      # =========================
+      - name: Commit and push changes
+        run: |
+          cd Quickart-deploy
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          BRANCH=update-image-$TAG
+
+          git checkout -b $BRANCH
+
+          git add .
+
+          git commit -m "Update image tags to $TAG"
+
+          git push origin $BRANCH
+
+      # =========================
+      # Create Pull Request
+      # =========================
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+        run: |
+          cd Quickart-deploy
+
+          gh pr create \
+            --title "Update image tags to $TAG" \
+            --body "Automated image tag update from GitHub Actions pipeline" \
+            --base main \
+            --head $BRANCH
