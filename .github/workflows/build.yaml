@@ -13,17 +13,17 @@ jobs:
 
     steps:
 
-      # =========================
-      # Checkout Application Repo
-      # =========================
+      # ==========================================
+      # Checkout Application Repository
+      # ==========================================
       - name: Checkout application repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # =========================
+      # ==========================================
       # Detect Changed Files
-      # =========================
+      # ==========================================
       - name: Detect changed files
         id: changes
         run: |
@@ -39,53 +39,71 @@ jobs:
           echo "Changed files:"
           echo "$FILES"
 
-          echo "FILES=$FILES" >> $GITHUB_ENV
+          echo "FILES<<EOF" >> $GITHUB_ENV
+          echo "$FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
-      # =========================
+      # ==========================================
       # Determine Impacted Services
-      # =========================
+      # ==========================================
       - name: Determine impacted services
         run: |
           SERVICES=""
 
+          # Shared dependency change
           if echo "$FILES" | grep -E 'pom.xml|common-lib/'; then
             SERVICES="product-service user-service order-service"
+
           else
-            echo "$FILES" | grep -q "product-service/" && SERVICES="$SERVICES product-service"
-            echo "$FILES" | grep -q "user-service/" && SERVICES="$SERVICES user-service"
-            echo "$FILES" | grep -q "order-service/" && SERVICES="$SERVICES order-service"
+            echo "$FILES" | grep -q "^product-service/" && SERVICES="$SERVICES product-service"
+
+            echo "$FILES" | grep -q "^user-service/" && SERVICES="$SERVICES user-service"
+
+            echo "$FILES" | grep -q "^order-service/" && SERVICES="$SERVICES order-service"
           fi
 
           SERVICES=$(echo $SERVICES | xargs)
 
-          if [ -z "$SERVICES" ]; then
-            echo "No impacted services found."
-            exit 0
-          fi
-
-          echo "Services to build: $SERVICES"
+          echo "Detected services: $SERVICES"
 
           echo "SERVICES=$SERVICES" >> $GITHUB_ENV
 
-      # =========================
+      # ==========================================
+      # Stop Workflow If No Services Changed
+      # ==========================================
+      - name: Skip if no impacted services
+        run: |
+          if [ -z "$SERVICES" ]; then
+            echo "No impacted services detected."
+
+            echo "Skipping pipeline."
+
+            exit 0
+          fi
+
+      # ==========================================
       # Setup Java
-      # =========================
+      # ==========================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # =========================
-      # Build Services
-      # =========================
+      # ==========================================
+      # Build Impacted Services
+      # ==========================================
       - name: Build impacted services
         run: |
-          mvn clean package -pl $(echo "$SERVICES" | tr ' ' ',') -am
+          echo "Building services: $SERVICES"
 
-      # =========================
+          mvn clean package \
+            -pl $(echo "$SERVICES" | tr ' ' ',') \
+            -am
+
+      # ==========================================
       # Generate Image Tag
-      # =========================
+      # ==========================================
       - name: Generate image tag
         run: |
           TAG=$(echo "${{ github.sha }}" | cut -c1-7)
@@ -94,25 +112,25 @@ jobs:
 
           echo "Using image tag: $TAG"
 
-      # =========================
-      # Docker Login
-      # =========================
-      - name: Login to Docker Hub
+      # ==========================================
+      # Login to DockerHub
+      # ==========================================
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # =========================
-      # Build and Push Images
-      # =========================
+      # ==========================================
+      # Build and Push Docker Images
+      # ==========================================
       - name: Build and push Docker images
         run: |
           for svc in $SERVICES; do
 
-            echo "===================================="
-            echo "Building service: $svc"
-            echo "===================================="
+            echo "=================================="
+            echo "Building Docker image for $svc"
+            echo "=================================="
 
             docker build \
               -t prav1619/$svc:$TAG \
@@ -121,20 +139,21 @@ jobs:
             docker tag prav1619/$svc:$TAG prav1619/$svc:latest
 
             docker push prav1619/$svc:$TAG
+
             docker push prav1619/$svc:latest
 
           done
 
-      # =========================
-      # Clone Deployment Repo
-      # =========================
+      # ==========================================
+      # Clone Deployment Repository
+      # ==========================================
       - name: Clone deployment repository
         run: |
           git clone https://${{ secrets.DEPLOY_REPO_TOKEN }}@github.com/Prav1619/Quickart-deploy.git
 
-      # =========================
-      # Update Only Impacted Values Files
-      # =========================
+      # ==========================================
+      # Update Only Impacted Helm Values Files
+      # ==========================================
       - name: Update Helm values files
         run: |
           cd Quickart-deploy
@@ -152,17 +171,20 @@ jobs:
 
           done
 
-      # =========================
-      # Create Branch + Commit
-      # =========================
+      # ==========================================
+      # Commit and Push Changes
+      # ==========================================
       - name: Commit and push changes
         run: |
           cd Quickart-deploy
 
           git config user.name "github-actions"
+
           git config user.email "github-actions@github.com"
 
           BRANCH=update-image-$TAG
+
+          echo "Using branch: $BRANCH"
 
           git checkout -b $BRANCH
 
@@ -172,9 +194,16 @@ jobs:
 
           git push origin $BRANCH
 
-      # =========================
+      # ==========================================
+      # Verify GitHub CLI
+      # ==========================================
+      - name: Verify GitHub CLI
+        run: |
+          gh --version
+
+      # ==========================================
       # Create Pull Request
-      # =========================
+      # ==========================================
       - name: Create Pull Request
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
@@ -185,4 +214,4 @@ jobs:
             --title "Update image tags to $TAG" \
             --body "Automated image tag update from GitHub Actions pipeline" \
             --base main \
-            --head $BRANCH
+            --head update-image-$TAG
