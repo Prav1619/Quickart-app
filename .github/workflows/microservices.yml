@@ -148,7 +148,7 @@ jobs:
 
       - name: Clone quickart-deploy Repo
         run: |
-          git clone https://${{ secrets.GIT_TOKEN }}@github.com/YOUR_GITHUB_USERNAME/quickart-deploy.git
+          git clone https://${{ secrets.DEPLOY_REPO_TOKEN }}@github.com/YOUR_GITHUB_USERNAME/quickart-deploy.git
 
       #################################################
       # INSTALL YQ
