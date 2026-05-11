@@ -5,10 +5,14 @@ on:
     branches:
       - main
 
-jobs: 
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
 
 #########################################################
-# DETECT CHANGES
+# DETECT CHANGED SERVICES
 #########################################################
 
   detect-changes:
@@ -20,7 +24,8 @@ jobs:
       user: ${{ steps.filter.outputs.user }}
 
     steps:
-      - name: Checkout Code
+
+      - name: Checkout quickart-app Repo
         uses: actions/checkout@v4
 
       - name: Detect Changed Services
@@ -38,7 +43,7 @@ jobs:
               - 'user-service/**'
 
 #########################################################
-# BUILD SERVICES
+# BUILD & PUSH ONLY CHANGED SERVICES
 #########################################################
 
   build-services:
@@ -55,14 +60,18 @@ jobs:
 
     steps:
 
-      - name: Checkout Code
+      #################################################
+      # CHECKOUT APPLICATION REPO
+      #################################################
+
+      - name: Checkout quickart-app Repo
         uses: actions/checkout@v4
 
       #################################################
-      # DETERMINE IF SERVICE CHANGED
+      # DETERMINE CHANGED SERVICE
       #################################################
 
-      - name: Set Change Variable
+      - name: Check Whether Service Changed
         id: changed
         run: |
 
@@ -77,7 +86,7 @@ jobs:
           fi
 
       #################################################
-      # JAVA SETUP
+      # SETUP JAVA
       #################################################
 
       - name: Setup Java
@@ -88,7 +97,7 @@ jobs:
           java-version: '17'
 
       #################################################
-      # BUILD APPLICATION
+      # BUILD SPRINGBOOT APPLICATION
       #################################################
 
       - name: Build SpringBoot App
@@ -98,18 +107,18 @@ jobs:
           mvn clean package -DskipTests
 
       #################################################
-      # DOCKER LOGIN
+      # LOGIN TO DOCKER HUB
       #################################################
 
-      - name: Docker Login
+      - name: DockerHub Login
         if: steps.changed.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       #################################################
-      # BUILD IMAGE
+      # BUILD DOCKER IMAGE
       #################################################
 
       - name: Build Docker Image
@@ -117,20 +126,21 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: |
           docker build \
-            -t ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }} .
+          -t $DOCKERHUB_USERNAME/${{ matrix.service }}:$IMAGE_TAG \
+          .
 
       #################################################
-      # PUSH IMAGE
+      # PUSH DOCKER IMAGE
       #################################################
 
       - name: Push Docker Image
         if: steps.changed.outputs.changed == 'true'
         run: |
           docker push \
-          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+          $DOCKERHUB_USERNAME/${{ matrix.service }}:$IMAGE_TAG
 
 #########################################################
-# SINGLE GITOPS UPDATE JOB
+# UPDATE GITOPS REPO
 #########################################################
 
   update-gitops:
@@ -143,12 +153,22 @@ jobs:
     steps:
 
       #################################################
-      # CLONE GITOPS REPO
+      # CHECKOUT APPLICATION REPO
       #################################################
 
-      - name: Clone quickart-deploy Repo
-        run: |
-          git clone https://${{ secrets.DEPLOY_REPO_TOKEN }}@github.com/Prav1619/quickart-deploy.git
+      - name: Checkout quickart-app Repo
+        uses: actions/checkout@v4
+
+      #################################################
+      # CHECKOUT GITOPS REPO
+      #################################################
+
+      - name: Checkout quickart-deploy Repo
+        uses: actions/checkout@v4
+        with:
+          repository: YOUR_GITHUB_USERNAME/quickart-deploy
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          path: quickart-deploy
 
       #################################################
       # INSTALL YQ
@@ -160,58 +180,83 @@ jobs:
           sudo chmod +x /usr/bin/yq
 
       #################################################
-      # UPDATE PRODUCT SERVICE
+      # DEBUG REPOS
       #################################################
 
-      - name: Update Product Service
+      - name: Verify Repositories
+        run: |
+          echo "Current Workspace:"
+          pwd
+
+          echo "Files:"
+          ls -la
+
+      #################################################
+      # UPDATE PRODUCT SERVICE IMAGE TAG
+      #################################################
+
+      - name: Update Product Service values.yaml
         if: needs.detect-changes.outputs.product == 'true'
         run: |
           cd quickart-deploy
 
           yq -i '
-          .image.tag = "${{ github.sha }}"
+          .image.repository = "'"$DOCKERHUB_USERNAME"'/product-service" |
+          .image.tag = "'"$IMAGE_TAG"'"
           ' charts/product-service/values.yaml
 
       #################################################
-      # UPDATE ORDER SERVICE
+      # UPDATE ORDER SERVICE IMAGE TAG
       #################################################
 
-      - name: Update Order Service
+      - name: Update Order Service values.yaml
         if: needs.detect-changes.outputs.order == 'true'
         run: |
           cd quickart-deploy
 
           yq -i '
-          .image.tag = "${{ github.sha }}"
+          .image.repository = "'"$DOCKERHUB_USERNAME"'/order-service" |
+          .image.tag = "'"$IMAGE_TAG"'"
           ' charts/order-service/values.yaml
 
       #################################################
-      # UPDATE USER SERVICE
+      # UPDATE USER SERVICE IMAGE TAG
       #################################################
 
-      - name: Update User Service
+      - name: Update User Service values.yaml
         if: needs.detect-changes.outputs.user == 'true'
         run: |
           cd quickart-deploy
 
           yq -i '
-          .image.tag = "${{ github.sha }}"
+          .image.repository = "'"$DOCKERHUB_USERNAME"'/user-service" |
+          .image.tag = "'"$IMAGE_TAG"'"
           ' charts/user-service/values.yaml
 
       #################################################
-      # COMMIT & PUSH ONCE
+      # VERIFY UPDATED VALUES
+      #################################################
+
+      - name: Verify Updated Files
+        run: |
+          cd quickart-deploy
+
+          find charts -name values.yaml | xargs cat
+
+      #################################################
+      # COMMIT & PUSH CHANGES
       #################################################
 
       - name: Commit and Push Changes
         run: |
-          cd Quickart-deploy
+          cd quickart-deploy
 
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
 
           git add .
 
-          git commit -m "Update image tags to ${{ github.sha }}" \
-          || echo "No changes"
+          git commit -m "Update image tags to $IMAGE_TAG" \
+          || echo "No changes to commit"
 
           git push
