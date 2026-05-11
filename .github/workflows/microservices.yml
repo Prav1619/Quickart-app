@@ -1,4 +1,4 @@
-name: Build Push Update Helm
+name: Enterprise Microservices CI/CD
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
       - main
 
 jobs:
+
+#########################################################
+# DETECT CHANGES
+#########################################################
 
   detect-changes:
     runs-on: ubuntu-latest
@@ -20,8 +24,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Detect Changed Services
-        uses: dorny/paths-filter@v3
         id: filter
+        uses: dorny/paths-filter@v3
         with:
           filters: |
             product:
@@ -33,49 +37,62 @@ jobs:
             user:
               - 'user-service/**'
 
-  build-and-deploy:
+#########################################################
+# BUILD SERVICES
+#########################################################
+
+  build-services:
     needs: detect-changes
 
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        include:
-          - service: product-service
-            changed: ${{ needs.detect-changes.outputs.product }}
-
-          - service: order-service
-            changed: ${{ needs.detect-changes.outputs.order }}
-
-          - service: user-service
-            changed: ${{ needs.detect-changes.outputs.user }}
-
-    if: matrix.changed == 'true'
+        service:
+          - product-service
+          - order-service
+          - user-service
 
     steps:
 
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       #################################################
-      # CHECKOUT
+      # DETERMINE IF SERVICE CHANGED
       #################################################
 
-      - name: Checkout Application Repo
-        uses: actions/checkout@v4
+      - name: Set Change Variable
+        id: changed
+        run: |
+
+          if [[ "${{ matrix.service }}" == "product-service" ]]; then
+            echo "changed=${{ needs.detect-changes.outputs.product }}" >> $GITHUB_OUTPUT
+
+          elif [[ "${{ matrix.service }}" == "order-service" ]]; then
+            echo "changed=${{ needs.detect-changes.outputs.order }}" >> $GITHUB_OUTPUT
+
+          elif [[ "${{ matrix.service }}" == "user-service" ]]; then
+            echo "changed=${{ needs.detect-changes.outputs.user }}" >> $GITHUB_OUTPUT
+          fi
 
       #################################################
       # JAVA SETUP
       #################################################
 
       - name: Setup Java
+        if: steps.changed.outputs.changed == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       #################################################
-      # BUILD SPRINGBOOT APP
+      # BUILD APPLICATION
       #################################################
 
-      - name: Build Service
+      - name: Build SpringBoot App
+        if: steps.changed.outputs.changed == 'true'
         working-directory: ${{ matrix.service }}
         run: |
           mvn clean package -DskipTests
@@ -84,31 +101,46 @@ jobs:
       # DOCKER LOGIN
       #################################################
 
-      - name: Login to DockerHub
+      - name: Docker Login
+        if: steps.changed.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       #################################################
       # BUILD IMAGE
       #################################################
 
       - name: Build Docker Image
+        if: steps.changed.outputs.changed == 'true'
         working-directory: ${{ matrix.service }}
         run: |
           docker build \
-          -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ github.sha }} \
-          .
+            -t ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }} .
 
       #################################################
       # PUSH IMAGE
       #################################################
 
       - name: Push Docker Image
+        if: steps.changed.outputs.changed == 'true'
         run: |
           docker push \
-          ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+
+#########################################################
+# SINGLE GITOPS UPDATE JOB
+#########################################################
+
+  update-gitops:
+    needs:
+      - detect-changes
+      - build-services
+
+    runs-on: ubuntu-latest
+
+    steps:
 
       #################################################
       # CLONE GITOPS REPO
@@ -128,25 +160,49 @@ jobs:
           sudo chmod +x /usr/bin/yq
 
       #################################################
-      # UPDATE HELM VALUES
+      # UPDATE PRODUCT SERVICE
       #################################################
 
-      - name: Update Helm values.yaml
+      - name: Update Product Service
+        if: needs.detect-changes.outputs.product == 'true'
         run: |
           cd quickart-deploy
 
           yq -i '
-          .image.repository = "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}" |
           .image.tag = "${{ github.sha }}"
-          ' helm-charts/${{ matrix.service }}/values.yaml
-
-          cat helm-charts/${{ matrix.service }}/values.yaml
+          ' helm-charts/product-service/values.yaml
 
       #################################################
-      # COMMIT CHANGES
+      # UPDATE ORDER SERVICE
       #################################################
 
-      - name: Commit Changes
+      - name: Update Order Service
+        if: needs.detect-changes.outputs.order == 'true'
+        run: |
+          cd quickart-deploy
+
+          yq -i '
+          .image.tag = "${{ github.sha }}"
+          ' helm-charts/order-service/values.yaml
+
+      #################################################
+      # UPDATE USER SERVICE
+      #################################################
+
+      - name: Update User Service
+        if: needs.detect-changes.outputs.user == 'true'
+        run: |
+          cd quickart-deploy
+
+          yq -i '
+          .image.tag = "${{ github.sha }}"
+          ' helm-charts/user-service/values.yaml
+
+      #################################################
+      # COMMIT & PUSH ONCE
+      #################################################
+
+      - name: Commit and Push Changes
         run: |
           cd quickart-deploy
 
@@ -155,15 +211,7 @@ jobs:
 
           git add .
 
-          git commit -m "Update ${{ matrix.service }} image to ${{ github.sha }}" \
+          git commit -m "Update image tags to ${{ github.sha }}" \
           || echo "No changes"
-
-      #################################################
-      # PUSH CHANGES
-      #################################################
-
-      - name: Push Changes
-        run: |
-          cd quickart-deploy
 
           git push
