@@ -148,7 +148,7 @@ jobs:
 
       - name: Clone quickart-deploy Repo
         run: |
-          git clone https://${{ secrets.DEPLOY_REPO_TOKEN }}@github.com/YOUR_GITHUB_USERNAME/quickart-deploy.git
+          git clone https://${{ secrets.DEPLOY_REPO_TOKEN }}@github.com/Prav1619/quickart-deploy.git
 
       #################################################
       # INSTALL YQ
@@ -170,7 +170,7 @@ jobs:
 
           yq -i '
           .image.tag = "${{ github.sha }}"
-          ' helm-charts/product-service/values.yaml
+          ' charts/product-service/values.yaml
 
       #################################################
       # UPDATE ORDER SERVICE
@@ -183,7 +183,7 @@ jobs:
 
           yq -i '
           .image.tag = "${{ github.sha }}"
-          ' helm-charts/order-service/values.yaml
+          ' charts/order-service/values.yaml
 
       #################################################
       # UPDATE USER SERVICE
@@ -196,7 +196,7 @@ jobs:
 
           yq -i '
           .image.tag = "${{ github.sha }}"
-          ' helm-charts/user-service/values.yaml
+          ' charts/user-service/values.yaml
 
       #################################################
       # COMMIT & PUSH ONCE
