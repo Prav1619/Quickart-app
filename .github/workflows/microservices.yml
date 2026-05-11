@@ -166,7 +166,7 @@ jobs:
       - name: Checkout Quickart-deploy Repo
         uses: actions/checkout@v4
         with:
-          repository: YOUR_GITHUB_USERNAME/Quickart-deploy
+          repository: Prav1619/Quickart-deploy
           token: ${{ secrets.DEPLOY_REPO_TOKEN }}
           path: Quickart-deploy
 
