@@ -11,6 +11,6 @@ public class Product {
 
     // getters
     public String getId() { return id; }
-    public String getName() { return Name; }
+    public String getName() { return name; }
     public int getPrice() { return price; }
 }
