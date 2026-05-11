@@ -163,12 +163,12 @@ jobs:
       # CHECKOUT GITOPS REPO
       #################################################
 
-      - name: Checkout quickart-deploy Repo
+      - name: Checkout Quickart-deploy Repo
         uses: actions/checkout@v4
         with:
-          repository: YOUR_GITHUB_USERNAME/quickart-deploy
+          repository: YOUR_GITHUB_USERNAME/Quickart-deploy
           token: ${{ secrets.DEPLOY_REPO_TOKEN }}
-          path: quickart-deploy
+          path: Quickart-deploy
 
       #################################################
       # INSTALL YQ
@@ -198,7 +198,7 @@ jobs:
       - name: Update Product Service values.yaml
         if: needs.detect-changes.outputs.product == 'true'
         run: |
-          cd quickart-deploy
+          cd Quickart-deploy
 
           yq -i '
           .image.repository = "'"$DOCKERHUB_USERNAME"'/product-service" |
@@ -212,7 +212,7 @@ jobs:
       - name: Update Order Service values.yaml
         if: needs.detect-changes.outputs.order == 'true'
         run: |
-          cd quickart-deploy
+          cd Quickart-deploy
 
           yq -i '
           .image.repository = "'"$DOCKERHUB_USERNAME"'/order-service" |
@@ -226,7 +226,7 @@ jobs:
       - name: Update User Service values.yaml
         if: needs.detect-changes.outputs.user == 'true'
         run: |
-          cd quickart-deploy
+          cd Quickart-deploy
 
           yq -i '
           .image.repository = "'"$DOCKERHUB_USERNAME"'/user-service" |
@@ -239,7 +239,7 @@ jobs:
 
       - name: Verify Updated Files
         run: |
-          cd quickart-deploy
+          cd Quickart-deploy
 
           find charts -name values.yaml | xargs cat
 
@@ -249,7 +249,7 @@ jobs:
 
       - name: Commit and Push Changes
         run: |
-          cd quickart-deploy
+          cd Quickart-deploy
 
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
