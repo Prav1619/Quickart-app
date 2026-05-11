@@ -1,10 +1,9 @@
-name: Build and Push Microservices
+name: Build Push Update Helm
 
 on:
   push:
     branches:
       - main
-      - prod
 
 jobs:
 
@@ -34,15 +33,37 @@ jobs:
             user:
               - 'user-service/**'
 
-  build-product:
+  build-and-deploy:
     needs: detect-changes
-    if: needs.detect-changes.outputs.product == 'true'
 
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        include:
+          - service: product-service
+            changed: ${{ needs.detect-changes.outputs.product }}
+
+          - service: order-service
+            changed: ${{ needs.detect-changes.outputs.order }}
+
+          - service: user-service
+            changed: ${{ needs.detect-changes.outputs.user }}
+
+    if: matrix.changed == 'true'
+
     steps:
-      - name: Checkout Code
+
+      #################################################
+      # CHECKOUT
+      #################################################
+
+      - name: Checkout Application Repo
         uses: actions/checkout@v4
+
+      #################################################
+      # JAVA SETUP
+      #################################################
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -50,91 +71,99 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build Product Service
-        working-directory: product-service
-        run: mvn clean package -DskipTests
+      #################################################
+      # BUILD SPRINGBOOT APP
+      #################################################
 
-      - name: Docker Login
+      - name: Build Service
+        working-directory: ${{ matrix.service }}
+        run: |
+          mvn clean package -DskipTests
+
+      #################################################
+      # DOCKER LOGIN
+      #################################################
+
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      #################################################
+      # BUILD IMAGE
+      #################################################
+
       - name: Build Docker Image
-        working-directory: product-service
+        working-directory: ${{ matrix.service }}
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/product-service:${{ github.sha }} .
+          docker build \
+          -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ github.sha }} \
+          .
+
+      #################################################
+      # PUSH IMAGE
+      #################################################
 
       - name: Push Docker Image
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/product-service:${{ github.sha }}
+          docker push \
+          ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
 
-  build-order:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.order == 'true'
+      #################################################
+      # CLONE GITOPS REPO
+      #################################################
 
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Build Order Service
-        working-directory: order-service
-        run: mvn clean package -DskipTests
-
-      - name: Docker Login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build Docker Image
-        working-directory: order-service
+      - name: Clone quickart-deploy Repo
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/order-service:${{ github.sha }} .
+          git clone https://${{ secrets.GIT_TOKEN }}@github.com/YOUR_GITHUB_USERNAME/quickart-deploy.git
 
-      - name: Push Docker Image
+      #################################################
+      # INSTALL YQ
+      #################################################
+
+      - name: Install yq
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/order-service:${{ github.sha }}
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
 
-  build-user:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.user == 'true'
+      #################################################
+      # UPDATE HELM VALUES
+      #################################################
 
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Build User Service
-        working-directory: user-service
-        run: mvn clean package -DskipTests
-
-      - name: Docker Login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build Docker Image
-        working-directory: user-service
+      - name: Update Helm values.yaml
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/user-service:${{ github.sha }} .
+          cd quickart-deploy
 
-      - name: Push Docker Image
+          yq -i '
+          .image.repository = "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}" |
+          .image.tag = "${{ github.sha }}"
+          ' helm-charts/${{ matrix.service }}/values.yaml
+
+          cat helm-charts/${{ matrix.service }}/values.yaml
+
+      #################################################
+      # COMMIT CHANGES
+      #################################################
+
+      - name: Commit Changes
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/user-service:${{ github.sha }}
+          cd quickart-deploy
+
+          git config user.email "github-actions@github.com"
+          git config user.name "github-actions"
+
+          git add .
+
+          git commit -m "Update ${{ matrix.service }} image to ${{ github.sha }}" \
+          || echo "No changes"
+
+      #################################################
+      # PUSH CHANGES
+      #################################################
+
+      - name: Push Changes
+        run: |
+          cd quickart-deploy
+
+          git push
