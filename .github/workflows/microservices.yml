@@ -204,7 +204,7 @@ jobs:
 
       - name: Commit and Push Changes
         run: |
-          cd quickart-deploy
+          cd Quickart-deploy
 
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
